@@ -1,4 +1,4 @@
-# Curdata: A distributed application for DCEP.
+# Curdata: A distributed application for DCEP
 
 *read in other language: [简体中文](zh/README.md)*
 
