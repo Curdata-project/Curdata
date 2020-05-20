@@ -9,50 +9,62 @@ KV对象用于描述Curdata中带有数字签名认证功能的对象描述功�
 KV对象可以可以被序列化成二进制格式，具体的KV对象需要实现如下的trait。
 
 ```rust
-trait KVObject: Serialize + DeserializeDe {
-    type Bytes: AsRef<[u8]>;
-    
-    type Keypair: Keypair;
-    
+pub trait KValueObject: Serialize + for<'de> Deserialize<'de> + AttrProxy {
+    type Bytes: Debug + AsRef<[u8]>;
+
+    type Signature: Serialize + for<'de> Deserialize<'de> + Bytes;
+
+    type KeyPair: asymmetric_crypto::prelude::Keypair<Signature = Self::Signature>;
+
+    type Certificate: asymmetric_crypto::prelude::Certificate<Signature = Self::Signature>;
+
     // 从Bytes反序列化
-	fn from_bytes(bytes: &Self::Bytes) -> Result<()>;
-    
+    fn from_bytes(bytes: &Self::Bytes) -> Result<Self, KVObjectError>;
+
     // 序列化成Bytes
-    fn to_bytes() -> Result<Self::Bytes>;
-    
-    // 根据key读取值
-    fn get_key(key: &str) -> Result<Self::Bytes>;
-    
-    // 根据key写取值
-    fn set_key(key: &str, value: Self::Bytes) -> Result<()>;
-    
-    // 验证签名是否正确
-    fn validate() -> Result<bool>;
+    fn to_bytes(&mut self, keypair: &Self::KeyPair) -> Result<Self::Bytes, KVObjectError>;
 }
 ```
 
 数字签名相关的键值设置：
 
 ```rust
-trait Keypair: Serialize + DeserializeDe {
+pub trait Keypair: Debug + Clone + Serialize + for<'de> Deserialize<'de> {
     type Seed;
-    
+
     type Secret;
-    
+
     type Public;
-    
+
     type Code;
-    
-    type Signature: Serialize + DeserializeDe + AsRef<[u8]>;
-    
-    fn generate<R: Rng>(rng: &mut R) -> Result<Self>;
-    
-    fn generate_from_seed(seed: &Self::Seed) -> Result<Self>;
-    
-    fn sign<H: Hasher, R: Rng>() -> Result<Signature>;
-    
-    fn verify<H: Hasher, R: Rng>(sig: &Self::Signature) -> Result<bool>;
+
+    type Signature: Serialize + for<'de> Deserialize<'de> + Bytes;
+
+    type Certificate: Certificate;
+
+    fn generate<R: RngCore>(rng: &mut R) -> Result<Self, CryptoError>;
+
+    fn generate_from_seed(seed: Self::Seed) -> Result<Self, CryptoError>;
+
+    fn sign<H: Default + Hasher<Output = [u8; 32]> + Hasher, R: RngCore>(
+        &self,
+        msg: &[u8],
+        rng: &mut R,
+    ) -> Result<Self::Signature, CryptoError>;
+
+    fn get_certificate(&self) -> Self::Certificate;
 }
+
+pub trait Certificate: Serialize + for<'de> Deserialize<'de> + Bytes {
+    type Signature;
+
+    fn verify<H: Default + Hasher<Output = [u8; 32]> + Hasher>(
+        &self,
+        msg: &[u8],
+        signature: &Self::Signature,
+    ) -> bool;
+}
+
 ```
 
 
